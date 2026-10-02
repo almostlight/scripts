@@ -19,7 +19,8 @@ for CTID in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
     pct exec "$CTID" -- bash -c '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
-        apt-get install -y fish openssh-server sudo
+        apt-get install -y sudo curl
+		sudo curl -sSL https://raw.githubusercontent.com/almostlight/headless_debian/setup.sh | sh
     ' || {
         echo "ERROR: CT $CTID package setup failed"
         continue
