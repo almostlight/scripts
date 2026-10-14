@@ -18,14 +18,21 @@ charset_len=$(( ${#charset} - 1 ))
     exit 1
 }
 
-command -v magick >/dev/null 2>&1 || {
-    printf 'Error: ImageMagick installation could not be verified (magick is required)\n' >&2
+if command -v magick >/dev/null 2>&1; then
+    convert_cmd=(magick)
+    identify_cmd=(magick identify)
+elif command -v convert >/dev/null 2>&1 && command -v identify >/dev/null 2>&1; then
+    # ImageMagick 6 and older expose convert and identify as separate commands.
+    convert_cmd=(convert)
+    identify_cmd=(identify)
+else
+    printf 'Error: ImageMagick installation could not be verified (magick or convert/identify is required)\n' >&2
     exit 1
-}
+fi
 
 # Get original dimensions (use [0] to select first frame for multi-frame images)
 img_frame="${image}[0]"
-dimensions=$(magick identify -format '%w %h' "$img_frame")
+dimensions=$("${identify_cmd[@]}" -format '%w %h' "$img_frame")
 read orig_width orig_height <<< "$dimensions"
 
 # A character is taller than it is wide. The aspect factor additionally
@@ -36,7 +43,7 @@ new_height=$(( (orig_height * width + orig_width * character_height_ratio * aspe
     (orig_width * character_height_ratio * aspect_factor) ))
 new_height=$(( new_height > 0 ? new_height : 1 ))
 
-magick "${image}[0]" -colorspace Gray \
+"${convert_cmd[@]}" "${image}[0]" -colorspace Gray \
     -resize "${output_width}x${new_height}!" txt:- |
     awk -v charset="$charset" -v charset_len="$charset_len" '
         /^#/ { next }
