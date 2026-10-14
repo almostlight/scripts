@@ -36,39 +36,32 @@ new_height=$(( (orig_height * width + orig_width * character_height_ratio * aspe
     (orig_width * character_height_ratio * aspect_factor) ))
 new_height=$(( new_height > 0 ? new_height : 1 ))
 
-temp_txt=$(mktemp)
-trap "rm -f $temp_txt" EXIT
+magick "${image}[0]" -colorspace Gray \
+    -resize "${output_width}x${new_height}!" txt:- |
+    awk -v charset="$charset" -v charset_len="$charset_len" '
+        /^#/ { next }
+        {
+            coordinate = $1
+            sub(/:.*/, "", coordinate)
+            split(coordinate, position, ",")
+            y = position[2]
 
-# Resize to the character grid dimensions. The non-proportional resize is
-# intentional: it compensates for the terminal character-cell aspect ratio.
-magick "${image}[0]" -colorspace Gray -resize "${output_width}x${new_height}!" txt:"${temp_txt}"
+            match($0, /\([0-9][0-9]*/)
+            grayscale = substr($0, RSTART + 1, RLENGTH - 1)
+            char_index = int(grayscale * charset_len / 255)
 
-current_y=-1
-current_line=""
-
-while IFS= read -r line; do
-    # Skip comment lines and empty lines
-    [[ "$line" =~ ^# ]] && continue
-    [[ -z "$line" ]] && continue
-    # Parse coordinates (format: "x,y:")
-    coordinates="${line%%:*}"
-    x=${coordinates%%,*}
-    y=${coordinates##*,}
-    # Extract grayscale value from "(r,g,b,a)" or "(g,alpha)" in IMv7
-    grayscale=$(echo "$line" | sed 's/^[^(]*(//' | sed 's/[^0-9].*//')
-    # Map grayscale (0-255) to charset index (0-8)
-    index=$(( grayscale * charset_len / 255 ))
-    [[ $index -gt $charset_len ]] && index=$charset_len
-    char="${charset:$index:1}"
-    # If we've moved to a new row, print the current line and start a new one
-
-    if [[ $y -ne $current_y ]]; then
-        [[ $current_y -ge 0 ]] && printf '%s\n' "$current_line"
-        current_line=""
-        current_y=$y
-    fi
-
-    current_line+="$char"
-done < "$temp_txt"
-# Print the last line
-[[ -n "$current_line" ]] && printf '%s\n' "$current_line"
+            if (y != current_y) {
+                if (current_y != "") {
+                    print current_line
+                }
+                current_line = ""
+                current_y = y
+            }
+            current_line = current_line substr(charset, char_index + 1, 1)
+        }
+        END {
+            if (current_line != "") {
+                print current_line
+            }
+        }
+    '
