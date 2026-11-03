@@ -6,6 +6,15 @@ MNT=/mnt/data
 
 step() { echo; echo "== $* =="; }
 
+chown_if_user_group_exists() {
+    local path=$1 user=$2 group=$3
+    if getent passwd "$user" >/dev/null && getent group "$group" >/dev/null; then
+        chown -R "$user:$group" "$path"
+    else
+        echo "user/group $user:$group does not exist — skipping chown for $path"
+    fi
+}
+
 #------------------------------------------------------------------------------
 step "blacklist dw_dmac"
 if [ ! -f /etc/modprobe.d/blacklist-dw_dmac.conf ]; then
@@ -71,9 +80,9 @@ if ! crontab -l 2>/dev/null | grep -Fqx '@reboot /usr/bin/mount -a'; then
     (crontab -l 2>/dev/null || true; echo '@reboot /usr/bin/mount -a') | crontab -
 fi
 mkdir -p "$MNT/docker" "$MNT/adguardhome" "$MNT/downloads" "$MNT/backups" "$MNT/logs" "$MNT/caddy/storage"
-chown -R adguardhome:adguardhome "$MNT/adguardhome"
-chown -R caddy:caddy "$MNT/caddy"
-chown -R docker:docker "$MNT/docker"
+chown_if_user_group_exists "$MNT/adguardhome" adguardhome adguardhome
+chown_if_user_group_exists "$MNT/caddy" caddy caddy
+chown_if_user_group_exists "$MNT/docker" docker docker
 echo "$MNT -> $(findmnt -no SOURCE "$MNT")"
 
 #------------------------------------------------------------------------------
