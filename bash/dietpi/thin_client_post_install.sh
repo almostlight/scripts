@@ -66,8 +66,9 @@ else
     echo "UUID=$UUID  $MNT  ext4  nofail,noatime,lazytime,commit=60,x-systemd.device-timeout=5s  0  2" >> /etc/fstab
 fi
 
-mkdir -p "$MNT/docker" "$MNT/adguardhome" "$MNT/downloads" "$MNT/backups" "$MNT/logs"
 mount -a
+mkdir -p "$MNT/docker" "$MNT/adguardhome" "$MNT/downloads" "$MNT/backups" "$MNT/logs" "$MNT/caddy/storage"
+chown -R caddy:caddy "$MNT/caddy"
 echo "$MNT -> $(findmnt -no SOURCE "$MNT")"
 
 #------------------------------------------------------------------------------
