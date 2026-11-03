@@ -25,20 +25,38 @@ if [ ! -b "$PART" ]; then
     for _ in 1 2 3 4 5; do [ -b "$PART" ] && break; sleep 1; done
 fi
 
-# format only if the partition is blank — existing data is never touched
-if [ -z "$(lsblk -fno FSTYPE "$PART")" ]; then
-    echo "formatting $PART as ext4 (it was blank)"
+# format the partition as ext4 when it is not already ext4
+if [ "$(lsblk -fno FSTYPE "$PART")" != ext4 ]; then
+    echo "formatting $PART as ext4"
     mkfs.ext4 -qF -L data "$PART"
 fi
 
-# stable by-id path for fstab (survives replug / sdX renaming)
-BY_ID=$PART
-for f in /dev/disk/by-id/usb-*-part1; do
-    [ "$(readlink -f "$f")" = "$(readlink -f "$PART")" ] && BY_ID=$f
-done
+# stable UUID for fstab (survives replug / device renaming)
+UUID=$(blkid -s UUID -o value "$PART")
+[ -n "$UUID" ] || { echo "failed to determine UUID for $PART" >&2; exit 1; }
 
-grep -qE "[[:space:]]$MNT[[:space:]]" /etc/fstab \
-    || echo "$BY_ID  $MNT  ext4  noatime,lazytime,commit=60  0  2" >> /etc/fstab
+if awk -v mountpoint="$MNT" \
+    '$1 !~ /^#/ && $2 == mountpoint { found = 1 } END { exit !found }' /etc/fstab; then
+    awk -v mountpoint="$MNT" -v uuid="$UUID" '
+        $1 !~ /^#/ && $2 == mountpoint {
+            $1 = "UUID=" uuid
+            $3 = "ext4"
+            n = split($4, o, ","); out = ""; nofail = 0; timeout = 0
+            for (i = 1; i <= n; i++) {
+                if (o[i] == "") continue
+                if (o[i] == "nofail") nofail = 1
+                if (o[i] ~ /^x-systemd.device-timeout=/) timeout = 1
+                out = out (out ? "," : "") o[i]
+            }
+            if (!nofail) out = "nofail," out
+            if (!timeout) out = out ",x-systemd.device-timeout=5s"
+            $4 = out
+        }
+        { print }
+    ' /etc/fstab > /etc/fstab.tmp && mv /etc/fstab.tmp /etc/fstab
+else
+    echo "UUID=$UUID  $MNT  ext4  nofail,noatime,lazytime,commit=60,x-systemd.device-timeout=5s  0  2" >> /etc/fstab
+fi
 
 mkdir -p "$MNT/docker" "$MNT/adguardhome" "$MNT/downloads" "$MNT/backups" "$MNT/logs"
 mount -a
@@ -143,4 +161,3 @@ step "weekly TRIM"
 systemctl is-enabled fstrim.timer >/dev/null 2>&1 \
     || systemctl enable --now fstrim.timer
 echo "fstrim.timer: $(systemctl is-enabled fstrim.timer)"
-
