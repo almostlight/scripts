@@ -21,6 +21,14 @@ case "$DISK" in /dev/mmcblk*) echo "refusing to touch the eMMC"; exit 1;; esac
 
 # create one GPT partition spanning the drive, only if there is none
 if [ ! -b "$PART" ]; then
+    PTTYPE=$(blkid -p -s PTTYPE -o value "$DISK" 2>/dev/null || true)
+    if [ -n "$PTTYPE" ]; then
+        read -r -p "$DISK has an existing $PTTYPE partition table. Overwrite it? [y/N] " answer
+        case "$answer" in
+            [yY]|[yY][eE][sS]) ;;
+            *) echo "refusing to overwrite the existing partition table"; exit 1 ;;
+        esac
+    fi
     echo "label: gpt, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$DISK"
     for _ in 1 2 3 4 5; do [ -b "$PART" ] && break; sleep 1; done
 fi
