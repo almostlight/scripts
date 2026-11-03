@@ -67,6 +67,9 @@ else
 fi
 
 mount -a
+if ! crontab -l 2>/dev/null | grep -Fqx '@reboot /usr/bin/mount -a'; then
+    (crontab -l 2>/dev/null || true; echo '@reboot /usr/bin/mount -a') | crontab -
+fi
 mkdir -p "$MNT/docker" "$MNT/adguardhome" "$MNT/downloads" "$MNT/backups" "$MNT/logs" "$MNT/caddy/storage"
 chown -R caddy:caddy "$MNT/caddy"
 echo "$MNT -> $(findmnt -no SOURCE "$MNT")"
