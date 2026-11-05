@@ -18,9 +18,9 @@ for CTID in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
     # Make sure required packages are installed
     pct exec "$CTID" -- bash -c '
         export DEBIAN_FRONTEND=noninteractive
+        set -e
         apt-get update -qq
-        apt-get install -y sudo curl
-		sudo curl -sSL https://raw.githubusercontent.com/almostlight/scripts/refs/heads/main/bash/debian/setup.sh | sh
+        apt-get install -y sudo curl fish openssh-server
     ' || {
         echo "ERROR: CT $CTID package setup failed"
         continue
@@ -56,4 +56,3 @@ for CTID in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
 
     echo "==> CT $CTID done"
 done
-
